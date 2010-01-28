@@ -1,0 +1,362 @@
+<?php
+// $Id$
+
+/**
+ * @file uniqueness.module
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function uniqueness_menu() {
+  $items['uniqueness-search'] = array(
+    'title' => 'Uniqueness search',
+    'page callback' => 'uniqueness_dynamic_callback',
+    'access arguments' => array('use uniqueness widget'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function uniqueness_perm() {
+  return array('use uniqueness widget');
+}
+
+// @todo hook_help().
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function uniqueness_form_alter(&$form, $form_state, $form_id) {
+  // Select node types to search for similarites.
+  if ($form_id == 'node_type_form') {
+    // @todo put this in submission form settings
+    $form['uniqueness'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Uniqueness'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+    );
+    $form['uniqueness']['uniqueness_type'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Provide uniqueness search'),
+      '#description' => t('Shows similar content during new content creation to avoid duplicates.'),
+      '#default_value' => variable_get('uniqueness_' . $form['#node_type']->type, FALSE),
+    );
+    // Add our submit handler.
+    $form['#submit'][] = '_uniqueness_node_type_submit';
+  }
+  // Attach submit handler to types and add js.
+  elseif (strpos($form_id, 'node_form') !== FALSE && arg(1) == 'add') {
+    $type = $form['type']['#value'];
+    $on = variable_get('uniqueness_' . $type, FALSE);
+    if ($on) {
+      // Add our javascript.
+      drupal_add_js(drupal_get_path('module', 'uniqueness') . '/uniqueness.js');
+      $search_url = base_path() . 'uniqueness-search/' . $type;
+      $ixdaRelated = array(
+        'URL' => $search_url,
+        'preview' => FALSE,
+      );
+      if (!empty($form_state['node_preview'])) {
+        $ixdaRelated['preview'] = TRUE;
+      }
+      drupal_add_js(array('uniqueness' => $ixdaRelated), 'setting');
+      // Add our submit handler.
+      $form['#submit'][] = '_uniqueness_node_add_submit';
+    }
+  }
+}
+
+/**
+ * Custom submit handler for the node type form.
+ */
+function _uniqueness_node_type_submit($form, &$form_state) {
+  $values = $form_state['values'];
+  if ($values['uniqueness_type'] == 1) {
+    variable_set('uniqueness_' . $values['type'], TRUE);
+  }
+  else {
+    variable_set('uniqueness_' . $values['type'], FALSE);
+  }
+}
+
+/**
+ * Custom submit handler for the node add form.
+ */
+function _uniqueness_node_add_submit($form, &$form_state) {
+  // We only look for similar content if the Preview button was clicked.
+  if ($form_state['clicked_button']['#id'] == 'edit-preview') {
+    $values = $form_state['values'];
+    $store = array();
+    // Store the title.
+    if (!empty($values['title'])) {
+      $store['title'] = strip_tags($values['title']);
+    }
+    // Store the tags.
+    if (!empty($values['taxonomy']['tags'][1])) {
+      $store['tags'] = strip_tags($values['taxonomy']['tags'][1]);
+    }
+    if (!empty($store)) {
+      _uniqueness_store($store);
+    }
+  }
+}
+
+/**
+ * Helper function solves FAPI deficiency by storing some data statically for retrieval in our block.
+ */
+function _uniqueness_store($values = array()) {
+  static $uniqueness_store  = array();
+  if (!empty($values)) {
+    $uniqueness_store = $values;
+  }
+  return $uniqueness_store;
+}
+
+/**
+ * Implementation of hook_block().
+ */
+function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
+  if ($op == 'list') {
+    // @todo I think we can cache the block actually -- explore.
+    $blocks['uniqueness'] = array(
+      'info' => t('Uniqueness search'),
+      'cache' => BLOCK_NO_CACHE,
+    );
+    return $blocks;
+  }
+  elseif ($op == 'view') {
+    // We only operate on the node add page for a type we search.
+    if (user_access('use uniqueness widget') && $delta == 'uniqueness' && arg(0) == 'node' && arg(1) == 'add') {
+      $on = variable_get('uniqueness_' . arg(2), FALSE);
+      if ($on) {
+        // @todo generalize
+        $block['subject'] = t('Related threads');
+        $block['content'] = uniqueness_block_content();
+        return $block;
+      }
+    }
+  }
+}
+
+/**
+ * Content of our block.
+ */
+function uniqueness_block_content() {
+  // @todo remove this and use a proper theme function for the widget
+  $output = "<p>Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here.</p>";
+  $output .= '<div class="uniqueness-dyn">';
+  // If we have stored values we've previewed the post.
+  $values = _uniqueness_store();
+  if (!empty($values)) {
+    $content = uniqueness_content($values);
+    if (!empty($content)) {
+      // Show list of content to user.
+      $links = theme('related_content_list', $content);
+      $output .= $links;
+    }
+  }
+  $output .= '</div>';
+  return $output;
+}
+
+/**
+ * Callback for ixda-related returns HTML stubs for related content.
+ */
+function uniqueness_dynamic_callback($type = '', $string = '') {
+  // Build $values from $string.
+  $values = array();
+  // @todo refer to tags as 'terms'
+  if ($_GET['tags']) {
+    $values['tags'] = strip_tags($_GET['tags']);
+  }
+  if ($_GET['title']) {
+    $values['title'] = strip_tags($_GET['title']);
+  }
+  if (!empty($values)) {
+    $related_content = uniqueness_content($values);
+  }
+  if (!empty($related_content)) {
+    $items = array();
+    foreach ($related_content as $nid => $item) {
+      // Build items and avoid duplicates.
+      if (!in_array($nid, array_keys($items))) {
+        $items[$nid] = $item;
+        $items[$nid]['href'] = url('node/' . $nid);
+      }
+    }
+    drupal_json($items);
+  }
+  else {
+    drupal_json('false');
+  }
+  return;
+}
+
+/**
+ * Perform lookup of related or similar content.
+ */
+function uniqueness_content($values) {
+  $related_content = array();
+  // Use Solr if available.
+  if (module_exists('apachesolr_search')) {
+    // Search discussion types first.
+    // @todo generalize types
+    foreach (array('discussion', 'local_discussion') as $type) {
+      $filter = 'type:' . $type;
+      // Search title.
+      if ($values['title']) {
+        $title_content = uniqueness_solr($values['title'], $filter);
+        if (!empty($title_content)) {
+          $related_content = array_merge($related_content, $title_content);
+        }
+      }
+      // Search tags.
+      if ($values['tags']) {
+        $tags = explode(',', $values['tags']);
+        foreach ($tags as $tag) {
+          $results = uniqueness_solr(trim($tag), $filter);
+          if (!empty($results)) {
+            $related_content = array_merge($related_content, $results);
+          }
+        }
+      }
+    }
+  }
+  // Query node table.
+  elseif ($values['title']) {
+    $sql = "SELECT nid, title FROM {node} WHERE LOWER(title) LIKE LOWER('%%%s%') AND status = 1";
+    // @todo types
+    $result = db_query(db_rewrite_sql($sql), $values['title']);
+    while ($row = db_fetch_array($result)) {
+      $related_content[$row['nid']] = $row;
+    }
+  }
+  return $related_content;
+}
+
+function uniqueness_solr($string, $filter) {
+  $related_content = array();
+  try {
+    $solr_results = apachesolr_search_execute($string, $filter, '', '', 0, 'uniqueness');
+    foreach ($solr_results as $result) {
+      $item = array();
+      // Title has already been filtered.
+      $item['html'] = TRUE;
+      $item['nid'] = $result['node']->nid;
+      $item['title'] = $result['title'];
+      $related_content["{$result['node']->nid}"] = $item;
+    }
+  }
+  catch (Exception $e) { 
+    watchdog('Apache Solr', nl2br(check_plain($e->getMessage())), NULL, WATCHDOG_ERROR); 
+  }
+  return $related_content;
+}
+
+/**
+ * Implementation of hook_apachesolr_prepare_query().
+ */
+function uniqueness_apachesolr_prepare_query(&$query, &$params, $caller) {
+  if ($caller == 'uniqueness') {
+    // Tell Solr we only have to match on one word.
+    $params['mm'] = 1;
+  }
+}
+
+/**
+ * Execute a search results based on keyword, filter, and sort strings.
+ *
+ * @throws Exception
+ */
+function uniqueness_search_execute($keys, $filters, $solrsort, $base_path = '', $page = 0, $caller = 'apachesolr_search') {
+  // @todo I'm not sure if this is in use anymore
+  $params = array();
+  // This is the object that knows about the query coming from the user.
+  $query = apachesolr_drupal_query($keys, $filters, $solrsort, $base_path);
+  if (empty($query)) {
+    throw new Exception(t('Could not construct a Solr query in function apachesolr_search_search()'));
+  }
+
+  // This is the object that does the communication with the solr server.
+  $solr = apachesolr_get_solr();
+  $params += apachesolr_search_basic_params($query);
+  if ($keys) {
+    $params += apachesolr_search_highlighting_params($query);
+    $params += apachesolr_search_spellcheck_params($query);
+  }
+  else {
+    // No highlighting, use the teaser as a snippet.
+    $params['fl'] .= ',teaser';
+  }
+  apachesolr_search_add_facet_params($params, $query);
+  apachesolr_search_add_boost_params($params, $query, $solr);
+
+  // Allow modules to alter the query prior to statically caching it.
+  // This can e.g. be used to add available sorts.
+  foreach (module_implements('apachesolr_prepare_query') as $module) {
+    $function_name = $module . '_apachesolr_prepare_query';
+    $function_name($query, $params, $caller);
+  }
+
+  // Cache the built query. Since all the built queries go through
+  // this process, all the hook_invocations will happen later
+  apachesolr_current_query($query);
+
+  // This hook allows modules to modify the query and params objects.
+  apachesolr_modify_query($query, $params, $caller);
+  $params['start'] = $page * $params['rows'];
+
+  if (!$query) {
+    return array();
+  }
+
+  if (('' == $keys) && isset($params['fq'])) {
+    // Move the fq params to the q.alt for better performance.
+    $params['q.alt'] = implode(' ', $params['fq']);
+    unset($params['fq']);
+  }
+
+  $response = $solr->search($query->get_query_basic(), $params['start'], $params['rows'], $params);
+  // The response is cached so that it is accessible to the blocks and anything
+  // else that needs it beyond the initial search.
+  apachesolr_static_response_cache($response);
+  apachesolr_has_searched(TRUE);
+  // Add search terms and filters onto the breadcrumb.
+  drupal_set_breadcrumb(array_merge(menu_get_active_breadcrumb(), $query->get_breadcrumb()));
+  return apachesolr_process_response($response, $query, $params);
+}
+
+/**
+ * Implementation of hook_theme().
+ */
+function uniqueness_theme($existing, $type, $theme, $path) {
+  return array(
+    'related_content_list' => array(
+      'arguments' => array('content' => NULL),
+    ),
+  );
+}
+
+/**
+ * Theme function returns list of links.
+ *
+ * Note, $content can contain unsanitized content from the database.
+ */
+function theme_related_content_list($content) {
+  $items = array();
+  foreach ($content as $nid => $item) {
+    // Avoid duplicates.
+    if (!in_array($nid, array_keys($items))) {
+      // Storage.
+      $items[$nid] = $item;
+      $options = array('html' => $item['html'], 'attributes' => array('target' => '_blank'));
+      $links[] = l($item['title'], 'node/' . $item['nid'], $options);
+    }
+  }
+  return theme('item_list', $links);
+}

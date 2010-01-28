@@ -1,0 +1,4 @@
+; $Id$
+core = "6.x"
+description = "Show similar content during node submission to avoid duplicate content"
+name = "Uniqueness"
