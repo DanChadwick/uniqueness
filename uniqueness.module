@@ -229,7 +229,7 @@ function uniqueness_content($values) {
   }
   // Query node table.
   elseif ($values['title']) {
-    $sql = "SELECT nid, title FROM {node} WHERE LOWER(title) LIKE LOWER('%%%s%') AND status = 1";
+    $sql = "SELECT n.nid, n.title FROM {node} n WHERE LOWER(n.title) LIKE LOWER('%%%s%') AND n.status = 1";
     // @todo types
     $result = db_query(db_rewrite_sql($sql), $values['title']);
     while ($row = db_fetch_array($result)) {
