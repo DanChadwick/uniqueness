@@ -66,17 +66,18 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
       // Add our javascript.
       drupal_add_js(drupal_get_path('module', 'uniqueness') . '/uniqueness.js');
       $search_url = base_path() . 'uniqueness-search/' . $type;
-      $ixdaRelated = array(
+      $settings = array(
         'URL' => $search_url,
         'preview' => FALSE,
+        'prependResults' => variable_get('uniqueness_results_prepend', 0) == 1 ? TRUE : FALSE,
       );
       if (!empty($form_state['node_preview'])) {
-        $ixdaRelated['preview'] = TRUE;
+        $settings['preview'] = TRUE;
       }
-      drupal_add_js(array('uniqueness' => $ixdaRelated), 'setting');
+      drupal_add_js(array('uniqueness' => $settings), 'setting');
       // Add our submit handler.
       $form['#submit'][] = '_uniqueness_node_add_submit';
-    }
+}
   }
 }
 
@@ -175,7 +176,7 @@ function uniqueness_block_content() {
 }
 
 /**
- * Callback for ixda-related returns HTML stubs for related content.
+ * Callback for uniqueness-search returns HTML stubs for related content.
  */
 function uniqueness_dynamic_callback($type = '', $string = '') {
   // Build $values from $string.

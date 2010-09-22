@@ -12,7 +12,7 @@
 function uniqueness_settings() {
   $form = array();
 
-  // appearance
+  // Appearance.
   $form['appearance'] = array(
     '#type' => 'fieldset',
     '#title' => t('Appearance'),
@@ -34,6 +34,16 @@ function uniqueness_settings() {
         t("Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here.")),
     '#rows' => 2,
   );
-
+  $form['appearance']['uniqueness_results_prepend'] = array(
+    '#type' => 'radios',
+    '#title' => t('Results display'),
+    '#options' => array(
+      0 => t('Replace old results with new ones'),
+      1 => t('Leave old results and prepend new ones'),
+    ),
+    '#default_value' => variable_get('uniqueness_results_prepend', 0),
+    '#description' => t('Choose if new results replace or are added to existing results. Browser cache may keep this setting from taking affect right away.'),
+    '#required' => TRUE,
+  );
   return system_settings_form($form);
 }
