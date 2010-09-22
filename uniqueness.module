@@ -15,6 +15,15 @@ function uniqueness_menu() {
     'access arguments' => array('use uniqueness widget'),
     'type' => MENU_CALLBACK,
   );
+  $items['admin/settings/uniqueness'] = array(
+    'title' => 'Uniqueness',
+    'description' => 'Configure the behaviour and appearance of the uniqueness widget.',
+    'file' => 'uniqueness.admin.inc',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('uniqueness_settings'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM,
+  );
   return $items;
 }
 
@@ -134,8 +143,7 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
     if (user_access('use uniqueness widget') && $delta == 'uniqueness' && arg(0) == 'node' && arg(1) == 'add') {
       $on = variable_get('uniqueness_' . arg(2), FALSE);
       if ($on) {
-        // @todo generalize
-        $block['subject'] = t('Related threads');
+        $block['subject'] = t('@title', array('@title' => variable_get('uniqueness_default_title', 'Related content')));
         $block['content'] = uniqueness_block_content();
         return $block;
       }
@@ -147,8 +155,10 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
  * Content of our block.
  */
 function uniqueness_block_content() {
-  // @todo remove this and use a proper theme function for the widget
-  $output = "<p>Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here.</p>";
+  $output = '';
+  $description = t('!description', array('!description' => filter_xss(variable_get('uniqueness_default_description',
+      "Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here."))));
+  if (!empty($description)) $output .= "<p>" . $description . "</p>";
   $output .= '<div class="uniqueness-dyn">';
   // If we have stored values we've previewed the post.
   $values = _uniqueness_store();
