@@ -12,6 +12,22 @@
 function uniqueness_settings() {
   $form = array();
 
+  // Search options.
+  $form['search'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Search'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  $form['search']['uniqueness_search_mode'] = array(
+    '#type' => 'radios',
+    '#title' => t('Search mode'),
+    '#description' => t('Select the mode which should be used for generating the list of related nodes.'),
+    '#options' => _uniqueness_search_mode_options(),
+    '#default_value' => variable_get('uniqueness_search_mode', UNIQUENESS_SEARCH_MODE_NODETITLE),
+    '#required' => TRUE,
+  );
+
   // Appearance.
   $form['appearance'] = array(
     '#type' => 'fieldset',
@@ -46,4 +62,21 @@ function uniqueness_settings() {
     '#required' => TRUE,
   );
   return system_settings_form($form);
+}
+
+function _uniqueness_search_mode_options() {
+  $options = array(
+    UNIQUENESS_SEARCH_MODE_NODETITLE => t('Simple node title search'),
+  );
+  if (module_exists('search')) {
+    $options += array(
+      UNIQUENESS_SEARCH_MODE_DRUPAL => t('Drupal search'),
+    );
+  }
+  if (module_exists('apachesolr_search')) {
+    $options += array(
+      UNIQUENESS_SEARCH_MODE_SOLR => t('Apache Solr Search'),
+    );
+  }
+  return $options;
 }
