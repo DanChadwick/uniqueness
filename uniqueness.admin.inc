@@ -35,6 +35,14 @@ function uniqueness_settings() {
     '#collapsible' => TRUE,
     '#collapsed' => FALSE,
   );
+  $form['appearance']['uniqueness_widgets'] = array(
+    '#type' => 'checkboxes',
+    '#options' => array(
+      UNIQUENESS_WIDGET_INLINE => t('Display related content inline, embedded on the "node add" form.'),
+      UNIQUENESS_WIDGET_BLOCK => t('Provide a block for displaying related content.'),
+    ),
+    '#default_value' => variable_get('uniqueness_widgets', array(UNIQUENESS_WIDGET_INLINE)),
+  );
   $form['appearance']['uniqueness_default_title'] = array(
     '#type' => 'textfield',
     '#title' => t('Default title'),
