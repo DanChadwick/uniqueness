@@ -51,7 +51,7 @@ function uniqueness_help($path, $arg) {
       return $output;
     case 'admin/help#uniqueness':
       $output = '<p>' . t('Uniqueness module provides a way to avoid duplicate content on your site by informing a user about similar or related content during creation of a new post.' . '</p>');
-      $output .= '<p>' . t('An UI widget is added to the <code>node/add/*</code> form which performs asynchronous searches on input fields (like the node title or vocabularies) and returns a list of similar content.') . '</p>';
+      $output .= '<p>' . t('A UI widget is added to the node adding (or editing) form which performs asynchronous searches on input fields (like the node title or vocabularies) and returns a list of similar content.') . '</p>';
       $output .= '<p>' . t('This widget needs to be enabled separately for each content type on the configuration page for each <a href="@content-types-page">content type</a>. Configuration options (appearance, search modes) are available on the <a href="@uniqueness-settings-page">uniqueness settings page</a>.', array('@content-types-page' => url('admin/content/types'), '@uniqueness-settings-page' => url('admin/settings/uniqueness'))) . '</p>';
       $output .= '<h3>' .t('Search modes') . '</h3>';
       $output .= '<p>' . t('The module supports three different search modes:') . '</p>';
@@ -107,8 +107,9 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
     $form['#submit'][] = '_uniqueness_node_type_submit';
   }
   // Attach submit handler to types and add js.
-  elseif (strpos($form_id, 'node_form') !== FALSE && arg(1) == 'add') {
+  elseif (strpos($form_id, 'node_form') !== FALSE && uniqueness_page_enabled()) {
     $type = $form['type']['#value'];
+    uniqueness_content_type($type);       // Save the content type for later use
     $on = variable_get('uniqueness_' . $type, FALSE);
     if ($on) {
       // Add our javascript.
@@ -148,6 +149,41 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
 function uniqueness_widget_enabled($widget) {
   $widget_types = variable_get('uniqueness_widgets', array(UNIQUENESS_WIDGET_INLINE));
   return in_array($widget, $widget_types);
+}
+
+/**
+ * Helper function determines whether current URL should have uniqnuess
+ *
+ * @return
+ *  TRUE if uniqueness should be applied to the current URL; FALSE otherwise
+ */
+function uniqueness_page_enabled() {
+  $path = drupal_get_path_alias($_GET['q']);
+  // Compare with the internal and path alias (if any).
+  $path_config = variable_get('uniqueness_page_visibility', "node/add/*");
+  $page_match = drupal_match_path($path, $path_config) ||
+               ($path != $_GET['q'] && drupal_match_path($_GET['q'], $path_config));
+  return $page_match;
+}
+
+/**
+ * Helper function saves and returns the current content type.
+ *
+ * Needed because both the content type of the node is not known when the block
+ * is built or (@todo) when the dynamic content is generated.
+ *
+ * @param $type
+ *    If non-NULL, sets the content type to this type
+ *
+ * @return
+ *    Returns the current content type
+ */
+function uniqueness_content_type($type = NULL) {
+  static $saved_type = NULL;
+  if ($type !== NULL) {
+    $saved_type = $type;
+  }
+  return $saved_type;
 }
 
 /**
@@ -230,8 +266,8 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
   }
   elseif ($op == 'view') {
     // We only operate on the node add page for a type we search.
-    if (user_access('use uniqueness widget') && $delta == 'uniqueness' && arg(0) == 'node' && arg(1) == 'add') {
-      $on = variable_get('uniqueness_' . arg(2), FALSE);
+    if (user_access('use uniqueness widget') && $delta == 'uniqueness' && uniqueness_page_enabled()) {
+      $on = variable_get('uniqueness_' . uniqueness_content_type(), FALSE);
       if ($on) {
         $block['subject'] = t('@title', array('@title' => variable_get('uniqueness_default_title', 'Related content')));
         $block['content'] = uniqueness_widget_content();

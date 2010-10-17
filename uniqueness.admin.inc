@@ -58,6 +58,15 @@ function uniqueness_settings() {
         t("Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here.")),
     '#rows' => 2,
   );
+  $form['appearance']['uniqueness_page_visibility'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Page visibility'),
+    '#default_value' => variable_get('uniqueness_page_visibility', "node/add/*"),
+    '#rows' => 2,
+    '#description' => t('Configure which "node add" or "node edit" pages should display related content. Enter one page per line as Drupal paths. ' .
+                        'The "*" characters is a wildcard. Example paths are %add for adding new content and %edit for editing existing content.',
+                        array('%add' => 'node/add/*', '%edit' => 'node/*/edit')),
+  );
   $form['appearance']['uniqueness_results_prepend'] = array(
     '#type' => 'radios',
     '#title' => t('Results display'),
