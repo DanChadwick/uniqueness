@@ -23,7 +23,7 @@ function uniqueness_menu() {
     'type' => MENU_CALLBACK,
   );
   $items['admin/settings/uniqueness'] = array(
-    'title' => 'Uniqueness',
+    'title' => 'Uniqueness settings',
     'description' => 'Configure the behaviour and appearance of the uniqueness widget.',
     'file' => 'uniqueness.admin.inc',
     'page callback' => 'drupal_get_form',
@@ -41,7 +41,28 @@ function uniqueness_perm() {
   return array('use uniqueness widget');
 }
 
-// @todo hook_help().
+/**
+ * Implementation of hook_help().
+ */
+function uniqueness_help($path, $arg) {
+  switch ($path) {
+    case 'admin/settings/uniqueness':
+      $output = '<p>' . t('Uniqueness module provides a way to avoid duplicate content on your site by informing a user about similar or related content during creation of a new post.' . '</p>');
+      return $output;
+    case 'admin/help#uniqueness':
+      $output = '<p>' . t('Uniqueness module provides a way to avoid duplicate content on your site by informing a user about similar or related content during creation of a new post.' . '</p>');
+      $output .= '<p>' . t('An UI widget is added to the <code>node/add/*</code> form which performs asynchronous searches on input fields (like the node title or vocabularies) and returns a list of similar content.') . '</p>';
+      $output .= '<p>' . t('This widget needs to be enabled separately for each content type on the configuration page for each <a href="@content-types-page">content type</a>. Configuration options (appearance, search modes) are available on the <a href="@uniqueness-settings-page">uniqueness settings page</a>.', array('@content-types-page' => url('admin/content/types'), '@uniqueness-settings-page' => url('admin/settings/uniqueness'))) . '</p>';
+      $output .= '<h3>' .t('Search modes') . '</h3>';
+      $output .= '<p>' . t('The module supports three different search modes:') . '</p>';
+      $output .= '<ul>';
+      $output .= '<li>' . t('Simple node title search (default): tries to match the title of a new node by comparing the new title with the title of existing nodes.') . '</li>';
+      $output .= '<li>' . t('Drupal Search: tries to find similar nodes by searching for nodes using the standard search module. Requires the (core) search module to be enabled!') . '</li>';
+      $output .= '<li>' . t('Apache Solr: tries to find similar nodes using the <a href="@apachesolr-project">Apache Solr</a> module which is required to be installed, configured and enabled.', array('@apachesolr-project' => url('http://drupal.org/project/apachesolr'))) . '</li>';
+      $output .= '</ul>';
+      return $output;
+  }
+}
 
 /**
  * Implementation of hook_content_extra_fields().
