@@ -318,9 +318,19 @@ function uniqueness_dynamic_callback($type = '', $string = '') {
   }
   if (!empty($related_content)) {
     $items = array();
+    $i = 0;
+    $limit = variable_get('uniqueness_maxresults', 10);
     foreach ($related_content as $nid => $item) {
       // Build items and avoid duplicates.
       if (!in_array($nid, array_keys($items))) {
+        if (++$i > $limit) {
+          // At least one more than the maxresults limit were found
+          /* Communicate "and more" to the widget @todo
+          $item['title'] = '...';
+          $items[$nid] = $item;
+          */
+          break;                          // LOOP EXIT
+        }
         $items[$nid] = $item;
         $items[$nid]['href'] = url('node/' . $nid);
       }
@@ -357,9 +367,9 @@ function _uniqueness_content_nodetitle($values) {
   $related_content = array();
   // Query node table.
   if ($values['title']) {
-    $sql = "SELECT n.nid, n.title FROM {node} n WHERE LOWER(n.title) LIKE LOWER('%%%s%') AND n.status = 1";
+    $sql = "SELECT n.nid, n.title FROM {node} n WHERE LOWER(n.title) LIKE LOWER('%%%s%') AND n.status = 1 LIMIT %d";
     // @todo types
-    $result = db_query(db_rewrite_sql($sql), $values['title']);
+    $result = db_query(db_rewrite_sql($sql), $values['title'], variable_get('uniqueness_maxresults', 10) /* + 1 */); // +1 for elipsis @todo
     while ($row = db_fetch_array($result)) {
       $related_content[$row['nid']] = $row;
     }
@@ -436,6 +446,7 @@ function _uniqueness_content_solr($values) {
 function uniqueness_solr($string, $filter) {
   $related_content = array();
   try {
+    // @todo Limit number of results
     $solr_results = apachesolr_search_execute($string, $filter, '', '', 0, 'uniqueness');
     foreach ($solr_results as $result) {
       $item = array();
@@ -480,10 +491,17 @@ function uniqueness_theme($existing, $type, $theme, $path) {
  */
 function theme_related_content_list($content) {
   $items = array();
+  $i = 0;
+  $limit = variable_get('uniqueness_maxresults', 10);
   foreach ($content as $nid => $item) {
     // Avoid duplicates.
     if (!in_array($nid, array_keys($items))) {
       // Storage.
+      if (++$i > $limit) {
+        // At least one more than the maxresults limit were found
+        //$links[] = '...'; @todo elipsis support
+        break;                          // LOOP EXIT
+      }
       $items[$nid] = $item;
       $options = array('html' => $item['html'], 'attributes' => array('target' => '_blank'));
       $links[] = l($item['title'], 'node/' . $item['nid'], $options);

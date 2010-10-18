@@ -8,7 +8,7 @@ Drupal.behaviors.uniqueness = function (context) {
   // Search off title.
   $('#edit-title').keyup(function() {
     input = this.value;
-    if (input.length > 0) {
+    if (input.length >= 3) {
       uniqueness.search('title', input);
     }
     else if(input.length == 0 && !uniqueness.prependResults) {

@@ -27,6 +27,27 @@ function uniqueness_settings() {
     '#default_value' => variable_get('uniqueness_search_mode', UNIQUENESS_SEARCH_MODE_NODETITLE),
     '#required' => TRUE,
   );
+  $form['search']['uniqueness_results_prepend'] = array(
+    '#type' => 'radios',
+    '#title' => t('Results display'),
+    '#options' => array(
+      0 => t('Replace old results with new ones'),
+      1 => t('Leave old results and prepend new ones'),
+    ),
+    '#default_value' => variable_get('uniqueness_results_prepend', 0),
+    '#description' => t('Choose if new results replace or are added to existing results. Browser cache may keep this setting from taking affect right away.'),
+    '#required' => TRUE,
+  );
+  $form['search']['uniqueness_maxresults'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maximum number of results'),
+    '#default_value' => variable_get('uniqueness_maxresults', 10),
+    '#size' => 5,
+    '#maxlength' => 4,
+    '#required' => TRUE,
+    '#element_validate' => array('uniqueness_form_validate_maxresults'),
+    '#description' => t('Limit the number of search results to this number of fewer. (If using "Drupal search,", must be 10 or fewer.)'),
+  );
 
   // Appearance.
   $form['appearance'] = array(
@@ -67,17 +88,7 @@ function uniqueness_settings() {
                         'The "*" characters is a wildcard. Example paths are %add for adding new content and %edit for editing existing content.',
                         array('%add' => 'node/add/*', '%edit' => 'node/*/edit')),
   );
-  $form['appearance']['uniqueness_results_prepend'] = array(
-    '#type' => 'radios',
-    '#title' => t('Results display'),
-    '#options' => array(
-      0 => t('Replace old results with new ones'),
-      1 => t('Leave old results and prepend new ones'),
-    ),
-    '#default_value' => variable_get('uniqueness_results_prepend', 0),
-    '#description' => t('Choose if new results replace or are added to existing results. Browser cache may keep this setting from taking affect right away.'),
-    '#required' => TRUE,
-  );
+
   return system_settings_form($form);
 }
 
@@ -96,4 +107,16 @@ function _uniqueness_search_mode_options() {
     );
   }
   return $options;
+}
+
+/**
+ * Implementation of hook_form_validate().
+ */
+function uniqueness_form_validate_maxresults($element, &$form_state) {
+ // Validate that the number of results to show is numeric and within range
+ $upper_limit = ($form_state['values']['uniqueness_search_mode'] == UNIQUENESS_SEARCH_MODE_DRUPAL) ? 10 : 100;
+ $value = $element['#value'];
+  if (!is_numeric($value) || $value <= 0 || $value > $upper_limit) {
+    form_error($element, t('The number of results must between 1 and !upper.', array('!upper' => $upper_limit)));
+  }
 }
