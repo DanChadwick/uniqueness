@@ -23,13 +23,19 @@ Drupal.behaviors.uniqueness = function (context) {
       uniqueness.search('tags', input);
     }
   });
+  
+
+  value = $('#edit-title')[0].value;
+  if (value.length >= 3) {
+    uniqueness.search('title', $('#edit-title')[0].value);
+  }
 };
 
 Drupal.uniqueness = function (uri, widget) {
   this.uri = uri;
   this.delay = 500;
   this.widget = widget;
-  this.widget.append('<span class="uniqueness-dyn-span"></span').append('<ul class="uniqueness-dyn-ul"></ul>');
+  this.widget.append('<span class="uniqueness-dyn-span"></span>').append('<ul class="uniqueness-dyn-ul"></ul>');
   this.list = $('ul.uniqueness-dyn-ul');
   this.notifier = $('span.uniqueness-dyn-span');
   this.widgetCSS = {
