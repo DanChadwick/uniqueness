@@ -120,19 +120,20 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
         $form['uniqueness'] = array(
           '#type' => 'fieldset',
           '#title' => t('@title', array('@title' => variable_get('uniqueness_default_title', t('Related content')))),
-          '#collapsible' => 1,
-          '#collapsed' => 0,
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#attributes' => array('class' => 'uniqueness-fieldset'),
           '#weight' => $form['title']['#weight'] + 1, // place underneith title
         );
         $form['uniqueness']['uniqueness_type'] = array(
           '#type' => 'item',
           '#title' => '',
+          '#value' => uniqueness_widget_content(),
         );
-        $form['uniqueness']['uniqueness_type']['#value'] = uniqueness_widget_content();
       }
 
       // Add our submit handler.
-      $form['#submit'][] = '_uniqueness_node_add_submit';
+      //$form['#submit'][] = '_uniqueness_node_add_submit';
 }
   }
 }
@@ -284,18 +285,20 @@ function uniqueness_widget_content() {
   $output = '';
   $description = t('!description', array('!description' => filter_xss(variable_get('uniqueness_default_description',
       "Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here."))));
-  if (!empty($description)) $output .= "<p>" . $description . "</p>";
+  if (!empty($description)) {
+    $output .= '<p class="uniqueness-prompt">' . $description . '</p>';
+  }
   $output .= '<div class="uniqueness-dyn">';
   // If we have stored values we've previewed the post.
-  $values = _uniqueness_store();
-  if (!empty($values)) {
-    $content = uniqueness_content($values);
-    if (!empty($content)) {
-      // Show list of content to user.
-      $links = theme('related_content_list', $content);
-      $output .= $links;
-    }
-  }
+  //$values = _uniqueness_store();
+  //if (!empty($values)) {
+  //  $content = uniqueness_content($values);
+  //  if (!empty($content)) {
+  //    // Show list of content to user.
+  //    $links = theme('related_content_list', $content);
+  //    $output .= $links;
+  //  }
+  //}
   $output .= '</div>';
   return $output;
 }
@@ -323,16 +326,14 @@ function uniqueness_dynamic_callback($type = '', $string = '') {
     foreach ($related_content as $nid => $item) {
       // Build items and avoid duplicates.
       if (!in_array($nid, array_keys($items))) {
-        if (++$i > $limit) {
-          // At least one more than the maxresults limit were found
-          /* Communicate "and more" to the widget @todo
-          $item['title'] = '...';
-          $items[$nid] = $item;
-          */
-          break;                          // LOOP EXIT
-        }
         $items[$nid] = $item;
         $items[$nid]['href'] = url('node/' . $nid);
+        if (++$i > $limit) {
+          // At least one more than the maxresults limit were found
+          // Communicate "and more" to the widget 
+          $items[$nid]['more'] = TRUE;
+          break;                          // LOOP EXIT
+        }
       }
     }
     drupal_json($items);
@@ -369,7 +370,7 @@ function _uniqueness_content_nodetitle($values) {
   if ($values['title']) {
     $sql = "SELECT n.nid, n.title FROM {node} n WHERE LOWER(n.title) LIKE LOWER('%%%s%') AND n.status = 1 LIMIT %d";
     // @todo types
-    $result = db_query(db_rewrite_sql($sql), $values['title'], variable_get('uniqueness_maxresults', 10) /* + 1 */); // +1 for elipsis @todo
+    $result = db_query(db_rewrite_sql($sql), $values['title'], variable_get('uniqueness_maxresults', 10)  + 1 ); // +1 for elipsis
     while ($row = db_fetch_array($result)) {
       $related_content[$row['nid']] = $row;
     }
