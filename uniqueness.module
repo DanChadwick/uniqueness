@@ -5,6 +5,9 @@
  * @file uniqueness.module
  */
 
+define('UNIQUENESS_WIDGET_INLINE', 0x01);
+define('UNIQUENESS_WIDGET_BLOCK', 0x02);
+
 /**
  * Implementation of hook_menu().
  */
@@ -58,6 +61,26 @@ function uniqueness_help($path, $arg) {
 }
 
 /**
+ * Implementation of hook_content_extra_fields().
+ *
+ * Allows the inline uniqueness field to be sorted on the manage fields page if
+ * CCK is installed.
+ */
+function uniqueness_content_extra_fields() {
+  // Check that the inline widget is enabled
+  $widget_types = variable_get('uniqueness_widgets', array(UNIQUENESS_WIDGET_INLINE));
+  if (!in_array(UNIQUENESS_WIDGET_INLINE, $widget_types))
+    return array();
+
+  $extras['uniqueness'] = array(
+    'label' => t('@title', array('@title' => variable_get('uniqueness_default_title', t('Related content')))),
+    'description' => t('Uniqueness inline widget.'),
+  );
+
+  return $extras;
+}
+
+/**
  * Implementation of hook_form_alter().
  */
 function uniqueness_form_alter(&$form, $form_state, $form_id) {
@@ -85,21 +108,59 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
     $on = variable_get('uniqueness_' . $type, FALSE);
     if ($on) {
       // Add our javascript.
-      drupal_add_js(drupal_get_path('module', 'uniqueness') . '/uniqueness.js');
-      $search_url = base_path() . 'uniqueness-search/' . $type;
-      $settings = array(
-        'URL' => $search_url,
-        'preview' => FALSE,
-        'prependResults' => variable_get('uniqueness_results_prepend', 0) == 1 ? TRUE : FALSE,
-      );
-      if (!empty($form_state['node_preview'])) {
-        $settings['preview'] = TRUE;
+      _uniqueness_add_search_javascript();
+
+      // embed inline widget if enabled
+      if (uniqueness_widget_enabled(UNIQUENESS_WIDGET_INLINE)) {
+        $form['uniqueness'] = array(
+          '#type' => 'fieldset',
+          '#title' => t('@title', array('@title' => variable_get('uniqueness_default_title', t('Related content')))),
+          '#collapsible' => 1,
+          '#collapsed' => 0,
+          '#weight' => $form['title']['#weight'] + 1, // place underneith title
+        );
+        $form['uniqueness']['uniqueness_type'] = array(
+          '#type' => 'item',
+          '#title' => '',
+        );
+        $form['uniqueness']['uniqueness_type']['#value'] = uniqueness_widget_content();
       }
-      drupal_add_js(array('uniqueness' => $settings), 'setting');
+
       // Add our submit handler.
       $form['#submit'][] = '_uniqueness_node_add_submit';
 }
   }
+}
+
+/**
+ * Helper function checks whether a widget is enabled.
+ *
+ * @param $widget
+ *   Widget identifier, either UNIQUENESS_WIDGET_INLINE or UNIQUENESS_WIDGET_BLOCK
+ *
+ * @return
+ *   TRUE if the widget is enabled, FALSE otherwise.
+ */
+function uniqueness_widget_enabled($widget) {
+  $widget_types = variable_get('uniqueness_widgets', array(UNIQUENESS_WIDGET_INLINE));
+  return in_array($widget, $widget_types);
+}
+
+/**
+ * Generates and embeds javascript code required for the uniqueness search.
+ */
+function _uniqueness_add_search_javascript() {
+  drupal_add_js(drupal_get_path('module', 'uniqueness') . '/uniqueness.js');
+  $search_url = base_path() . 'uniqueness-search/' . $type;
+  $settings = array(
+    'URL' => $search_url,
+    'preview' => FALSE,
+    'prependResults' => variable_get('uniqueness_results_prepend', 0) == 1 ? TRUE : FALSE,
+  );
+  if (!empty($form_state['node_preview'])) {
+    $settings['preview'] = TRUE;
+  }
+  drupal_add_js(array('uniqueness' => $settings), 'setting');
 }
 
 /**
@@ -152,6 +213,9 @@ function _uniqueness_store($values = array()) {
  * Implementation of hook_block().
  */
 function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
+  // Check that the block widget is enabled
+  if (!uniqueness_widget_enabled(UNIQUENESS_WIDGET_BLOCK)) return;
+
   if ($op == 'list') {
     // @todo I think we can cache the block actually -- explore.
     $blocks['uniqueness'] = array(
@@ -166,7 +230,7 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
       $on = variable_get('uniqueness_' . arg(2), FALSE);
       if ($on) {
         $block['subject'] = t('@title', array('@title' => variable_get('uniqueness_default_title', 'Related content')));
-        $block['content'] = uniqueness_block_content();
+        $block['content'] = uniqueness_widget_content();
         return $block;
       }
     }
@@ -176,7 +240,7 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
 /**
  * Content of our block.
  */
-function uniqueness_block_content() {
+function uniqueness_widget_content() {
   $output = '';
   $description = t('!description', array('!description' => filter_xss(variable_get('uniqueness_default_description',
       "Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here."))));
