@@ -188,8 +188,6 @@ function uniqueness_content_type($type = NULL) {
   }
   return $saved_type;
 }
-define('UNIQUENESS_SCOPE_ALL', 0x01);
-define('UNIQUENESS_SCOPE_CONTENT_TYPE', 0x02);
 
 /**
  * Generates and embeds javascript code required for the uniqueness search.
