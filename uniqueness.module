@@ -12,6 +12,9 @@ define('UNIQUENESS_SEARCH_MODE_SOLR', 0x03);
 define('UNIQUENESS_WIDGET_INLINE', 0x01);
 define('UNIQUENESS_WIDGET_BLOCK', 0x02);
 
+define('UNIQUENESS_SCOPE_ALL', 0x01);
+define('UNIQUENESS_SCOPE_CONTENT_TYPE', 0x02);
+
 /**
  * Implementation of hook_menu().
  */
@@ -113,7 +116,7 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
     $on = variable_get('uniqueness_' . $type, FALSE);
     if ($on) {
       // Add our javascript.
-      _uniqueness_add_search_javascript();
+      _uniqueness_add_search_javascript($type, $form['nid']['#value']);
 
       // embed inline widget if enabled
       if (uniqueness_widget_enabled(UNIQUENESS_WIDGET_INLINE)) {
@@ -190,9 +193,15 @@ function uniqueness_content_type($type = NULL) {
 /**
  * Generates and embeds javascript code required for the uniqueness search.
  */
-function _uniqueness_add_search_javascript() {
+function _uniqueness_add_search_javascript($type, $nid) {
   drupal_add_js(drupal_get_path('module', 'uniqueness') . '/uniqueness.js');
-  $search_url = base_path() . 'uniqueness-search/' . $type;
+  if (variable_get('uniqueness_scope', UNIQUENESS_SCOPE_ALL) != UNIQUENESS_SCOPE_CONTENT_TYPE) {
+    $type = '_';
+  }
+  if (!is_numeric($nid)) {
+    $nid = 0;
+  }
+  $search_url = base_path() . "uniqueness-search/$type/$nid/";
   $settings = array(
     'URL' => $search_url,
     'preview' => FALSE,
@@ -306,7 +315,7 @@ function uniqueness_widget_content() {
 /**
  * Callback for uniqueness-search returns HTML stubs for related content.
  */
-function uniqueness_dynamic_callback($type = '', $string = '') {
+function uniqueness_dynamic_callback($type = '_', $nid = 0) {
   // Build $values from $string.
   $values = array();
   // @todo refer to tags as 'terms'
@@ -317,7 +326,7 @@ function uniqueness_dynamic_callback($type = '', $string = '') {
     $values['title'] = strip_tags($_GET['title']);
   }
   if (!empty($values)) {
-    $related_content = uniqueness_content($values);
+    $related_content = uniqueness_content($values, $type, $nid);
   }
   if (!empty($related_content)) {
     $items = array();
@@ -347,30 +356,38 @@ function uniqueness_dynamic_callback($type = '', $string = '') {
 /**
  * Perform lookup of related or similar content.
  */
-function uniqueness_content($values) {
+function uniqueness_content($values, $type, $nid) {
   $search_mode = variable_get('uniqueness_search_mode', UNIQUENESS_SEARCH_MODE_NODETITLE);
   switch ($search_mode) {
     case UNIQUENESS_SEARCH_MODE_NODETITLE:
-      return _uniqueness_content_nodetitle($values);
+      return _uniqueness_content_nodetitle($values, $type, $nid);
     case UNIQUENESS_SEARCH_MODE_DRUPAL:
-      return _uniqueness_content_drupalsearch($values);
+      return _uniqueness_content_drupalsearch($values, $type, $nid);
     case UNIQUENESS_SEARCH_MODE_SOLR:
-      return _uniqueness_content_solr($values);
+      return _uniqueness_content_solr($values, $type, $nid);
   }
-  return $related_content;
+  return NULL;
 }
 
 /**
  * Searches for related content by comparing the node title with the title of
  * existing nodes.
  */
-function _uniqueness_content_nodetitle($values) {
+function _uniqueness_content_nodetitle($values, $type, $nid) {
   $related_content = array();
   // Query node table.
   if ($values['title']) {
-    $sql = "SELECT n.nid, n.title FROM {node} n WHERE LOWER(n.title) LIKE LOWER('%%%s%') AND n.status = 1 LIMIT %d";
-    // @todo types
-    $result = db_query(db_rewrite_sql($sql), $values['title'], variable_get('uniqueness_maxresults', 10)  + 1 ); // +1 for elipsis
+    $where = array($values['title']);
+    $sql = "SELECT n.nid, n.title FROM {node} n WHERE LOWER(n.title) LIKE LOWER('%%%s%') AND n.status = 1";
+    if (!empty($type) && $type != '_') {
+      $sql .= " AND n.type = '%s'";
+      $where[] = $type;
+    }
+    if (is_numeric($nid) && $nid > 0) {
+      $sql .= " AND n.nid != %d";
+      $where[] = $nid;
+    }
+    $result = db_query_range(db_rewrite_sql($sql), $where, 0, variable_get('uniqueness_maxresults', 10)  + 1 ); // +1 for elipsis
     while ($row = db_fetch_array($result)) {
       $related_content[$row['nid']] = $row;
     }
@@ -382,7 +399,7 @@ function _uniqueness_content_nodetitle($values) {
 /**
  * Searches for related content using the drupal core search module.
  */
-function _uniqueness_content_drupalsearch($values) {
+function _uniqueness_content_drupalsearch($values, $type, $nid) {
   // Check that the core search module is available
   if (!module_exists('search')) {
     drupal_set_message(t('Search module not found. Please enable the search module or select a different search mode on the uniqueness configuration page.'), 'warning');
@@ -392,6 +409,9 @@ function _uniqueness_content_drupalsearch($values) {
   // build search string
   // @todo add types by adding e.g. type:blog
   $searchstring = join(' OR ', split(' ', $values['title']));
+  if (!empty ($type) && $type != '_') {
+    $searchstring .= " type:$type";
+  }
   $search_results = node_search('search', $searchstring);
 
   $related_content = array();
@@ -401,7 +421,9 @@ function _uniqueness_content_drupalsearch($values) {
       $item['html'] = TRUE;
       $item['nid'] = $result['node']->nid;
       $item['title'] = $result['title'];
-      $related_content["{$result['node']->nid}"] = $item;
+      if ($nid != $item['nid']) {
+        $related_content["{$result['node']->nid}"] = $item;
+      }
   }
 
   return $related_content;
@@ -410,7 +432,7 @@ function _uniqueness_content_drupalsearch($values) {
 /**
  * Searches for realted content using the apachesolr module.
  */
-function _uniqueness_content_solr($values) {
+function _uniqueness_content_solr($values, $type, $nid) {   // @todo implement $type and $nid
   // Check that the apachesolr module is available
   if (!module_exists('apachesolr_search')) {
     drupal_set_message(t('Solr search module not found. Please select a different search mode on the uniqueness configuration page.'), 'warning');
