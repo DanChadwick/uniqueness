@@ -27,6 +27,17 @@ function uniqueness_settings() {
     '#default_value' => variable_get('uniqueness_search_mode', UNIQUENESS_SEARCH_MODE_NODETITLE),
     '#required' => TRUE,
   );
+  $form['search']['uniqueness_scope'] = array(
+    '#type' => 'radios',
+    '#title' => t('Search scope'),
+    '#options' => array(
+      UNIQUENESS_SCOPE_ALL => t('Search in all nodes'),
+      UNIQUENESS_SCOPE_CONTENT_TYPE => t('Search only within the content type of the node being added or edited.'),
+    ),
+    '#default_value' => variable_get('uniqueness_scope', UNIQUENESS_SCOPE_ALL),
+    '#description' => t('Search all nodes or just nodes of the same content type.'),
+    '#required' => TRUE,
+  );
   $form['search']['uniqueness_results_prepend'] = array(
     '#type' => 'radios',
     '#title' => t('Results display'),
@@ -44,9 +55,9 @@ function uniqueness_settings() {
     '#default_value' => variable_get('uniqueness_maxresults', 10),
     '#size' => 5,
     '#maxlength' => 4,
-    '#required' => TRUE,
     '#element_validate' => array('uniqueness_form_validate_maxresults'),
     '#description' => t('Limit the number of search results to this number of fewer. (If using "Drupal search,", must be 10 or fewer.)'),
+    '#required' => TRUE,
   );
 
   // Appearance.
@@ -78,6 +89,7 @@ function uniqueness_settings() {
     '#default_value' => variable_get('uniqueness_default_description',
         t("Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here.")),
     '#rows' => 2,
+    '#description' => t('Heading text displayed within the widget before the list of duplicates.'),
   );
   $form['appearance']['uniqueness_page_visibility'] = array(
     '#type' => 'textarea',
