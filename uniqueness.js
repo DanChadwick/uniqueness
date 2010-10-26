@@ -93,7 +93,8 @@ Drupal.uniqueness.prototype.update = function (data) {
     $.each(data, function(i, item) {
       if (item.more) {
         uniqueness.notifier.append('... and others.');
-      } else {
+      }
+      else {
         items += '<li><a href="' + item.href + '" target="_blank">' + item.title + '</a></li>';
       }
     });
@@ -119,7 +120,7 @@ Drupal.uniqueness.prototype.search = function (element, searchString) {
   this.timer = setTimeout(function () {
     // Inform user we're searching.
     if (uniqueness.notifier.hasClass('uniqueness-dyn-searching') == false) {
-      uniqueness.notifier.addClass('uniqueness-dyn-searching').empty().append('Searching ...');
+      uniqueness.notifier.addClass('uniqueness-dyn-searching').html('Searching ...');
       uniqueness.widget.css(uniqueness.widgetCSS);
     }
     var query = uniqueness.uri + '?';
