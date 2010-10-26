@@ -12,6 +12,9 @@ define('UNIQUENESS_SEARCH_MODE_NODETITLE', 0x01);
 define('UNIQUENESS_SEARCH_MODE_DRUPAL', 0x02);
 define('UNIQUENESS_SEARCH_MODE_SOLR', 0x03);
 
+define('UNIQUENESS_ADD_NODE', 0x01);
+define('UNIQUENESS_EDIT_NODE', 0x02);
+
 /**
  * Implementation of hook_menu().
  */
@@ -51,7 +54,7 @@ function uniqueness_help($path, $arg) {
       return $output;
     case 'admin/help#uniqueness':
       $output = '<p>' . t('Uniqueness module provides a way to avoid duplicate content on your site by informing a user about similar or related content during creation of a new post.' . '</p>');
-      $output .= '<p>' . t('An UI widget is added to the <code>node/add</code> form which performs asynchronous searches on input fields (like the node title or vocabularies) and returns a list of similar content.') . '</p>';
+      $output .= '<p>' . t('A UI widget is added to the node adding and/or editing form which performs asynchronous searches on input fields (like the node title or vocabularies) and returns a list of similar content.') . '</p>';
       $output .= '<p>' . t('This widget needs to be enabled separately for each content type on the configuration page for each <a href="@content-types-page">content type</a>. Configuration options (appearance, search modes) are available on the <a href="@uniqueness-settings-page">uniqueness settings page</a>.', array('@content-types-page' => url('admin/content/types'), '@uniqueness-settings-page' => url('admin/settings/uniqueness'))) . '</p>';
       $output .= '<h3>' .t('Search modes') . '</h3>';
       $output .= '<p>' . t('The module supports three different search modes:') . '</p>';
@@ -93,24 +96,27 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
     // @todo put this in submission form settings
     $form['uniqueness'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Uniqueness'),
+      '#title' => t('Uniqueness settings'),
       '#collapsible' => TRUE,
       '#collapsed' => TRUE,
     );
     $form['uniqueness']['uniqueness_type'] = array(
-      '#type' => 'checkbox',
+      '#type' => 'checkboxes',
       '#title' => t('Provide uniqueness search'),
+      '#options' => array(
+        UNIQUENESS_ADD_NODE => t('When adding a new node of this content type'),
+        UNIQUENESS_EDIT_NODE => t('When editing an existing node of this content type'),
+      ),
       '#description' => t('Shows similar content during new content creation to avoid duplicates.'),
-      '#default_value' => variable_get('uniqueness_' . $form['#node_type']->type, FALSE),
+      '#default_value' => variable_get('uniqueness_type_' . $form['#node_type']->type, array()),
     );
-    // Add our submit handler.
-    $form['#submit'][] = '_uniqueness_node_type_submit';
   }
   // Attach submit handler to types and add js.
-  elseif (strpos($form_id, 'node_form') !== FALSE && arg(1) == 'add') {
+  elseif (isset($form['type']) && isset($form['#node']) && $form['type']['#value'] .'_node_form' == $form_id) {
     $type = $form['type']['#value'];
-    $on = variable_get('uniqueness_' . $type, FALSE);
-    if ($on) {
+    $op = empty($form['#node']->nid) ? UNIQUENESS_ADD_NODE : UNIQUENESS_EDIT_NODE;
+    _uniqueness_widget_store(array('type'=> $type, 'op' => $op));       // Save the content type and operation for later use
+    if (user_access('use uniqueness widget') && in_array($op, variable_get('uniqueness_type_' . $type, array()))) {
       // Add our javascript.
       _uniqueness_add_search_javascript();
 
@@ -151,6 +157,25 @@ function uniqueness_widget_enabled($widget) {
 }
 
 /**
+ * Helper function saves and returns the current content type and operation.
+ *
+ * Needed because both the content type and nid of the node are not known when the block
+ * is built.
+ *
+ * @param $options
+ *  If set, saves this array. 
+ *
+ * @return The previously saved array, or NULL
+ */
+function _uniqueness_widget_store($options = NULL) {
+  static $saved_options = NULL;
+  if ($options !== NULL) {
+    $saved_options = $options;
+  }
+  return $saved_options;
+}
+
+/**
  * Generates and embeds javascript code required for the uniqueness search.
  */
 function _uniqueness_add_search_javascript() {
@@ -165,19 +190,6 @@ function _uniqueness_add_search_javascript() {
     $settings['preview'] = TRUE;
   }
   drupal_add_js(array('uniqueness' => $settings), 'setting');
-}
-
-/**
- * Custom submit handler for the node type form.
- */
-function _uniqueness_node_type_submit($form, &$form_state) {
-  $values = $form_state['values'];
-  if ($values['uniqueness_type'] == 1) {
-    variable_set('uniqueness_' . $values['type'], TRUE);
-  }
-  else {
-    variable_set('uniqueness_' . $values['type'], FALSE);
-  }
 }
 
 /**
@@ -229,14 +241,13 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
     return $blocks;
   }
   elseif ($op == 'view') {
-    // We only operate on the node add page for a type we search.
-    if (user_access('use uniqueness widget') && $delta == 'uniqueness' && arg(0) == 'node' && arg(1) == 'add') {
-      $on = variable_get('uniqueness_' . arg(2), FALSE);
-      if ($on) {
-        $block['subject'] = t('@title', array('@title' => variable_get('uniqueness_default_title', 'Related content')));
-        $block['content'] = uniqueness_widget_content();
-        return $block;
-      }
+    // We only operate on the node form for a type we search.
+    $options = _uniqueness_widget_store();
+    if ($options !== NULL && user_access('use uniqueness widget') && $delta == 'uniqueness' && 
+        in_array($options['op'], variable_get('uniqueness_type_' . $options['type'], array()))) {
+      $block['subject'] = t('@title', array('@title' => variable_get('uniqueness_default_title', 'Related content')));
+      $block['content'] = uniqueness_widget_content();
+      return $block;
     }
   }
 }
