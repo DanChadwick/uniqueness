@@ -11,7 +11,8 @@ Drupal.behaviors.uniqueness = function (context) {
     else if(input.length == 0 && !uniqueness.prependResults) {
       uniqueness.clear();
     }
-  });
+  })
+  .keyup();     // Call immediately upon page load
   // Search off tags.
   $('#edit-taxonomy-tags-1').blur(function() {
     input = this.value;
@@ -21,11 +22,6 @@ Drupal.behaviors.uniqueness = function (context) {
     }
   });
   
-  // @todo DRY - used named function or extract anonymous function from keyup
-  var value = $('#edit-title')[0].value;
-  if (value.length >= uniqueness.minCharacters) {
-    uniqueness.search('title', $('#edit-title')[0].value);
-  }
 };
 
 Drupal.uniqueness = function (uri, widget) {
