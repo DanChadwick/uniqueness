@@ -107,7 +107,7 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
         UNIQUENESS_ADD_NODE => t('When adding a new node of this content type'),
         UNIQUENESS_EDIT_NODE => t('When editing an existing node of this content type'),
       ),
-      '#description' => t('Shows similar content during new content creation to avoid duplicates.'),
+      '#description' => t('Shows similar content when adding or editing content to help avoid duplication.'),
       '#default_value' => variable_get('uniqueness_type_' . $form['#node_type']->type, array()),
     );
   }
