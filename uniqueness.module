@@ -15,6 +15,9 @@ define('UNIQUENESS_SEARCH_MODE_SOLR', 0x03);
 define('UNIQUENESS_ADD_NODE', 0x01);
 define('UNIQUENESS_EDIT_NODE', 0x02);
 
+define('UNIQUENESS_SCOPE_ALL', 0x01);
+define('UNIQUENESS_SCOPE_CONTENT_TYPE', 0x02);
+
 /**
  * Implementation of hook_menu().
  */
@@ -60,8 +63,8 @@ function uniqueness_help($path, $arg) {
       $output .= '<p>' . t('The module supports three different search modes:') . '</p>';
       $output .= '<ul>';
       $output .= '<li>' . t('Simple node title search (default): tries to match the title of a new node by comparing the new title with the title of existing nodes.') . '</li>';
-      $output .= '<li>' . t('Drupal Search: tries to find similar nodes by searching for nodes using the standard search module. Requires the (core) search module to be enabled!') . '</li>';
-      $output .= '<li>' . t('Apache Solr: tries to find similar nodes using the <a href="@apachesolr-project">Apache Solr</a> module which is required to be installed, configured and enabled.', array('@apachesolr-project' => url('http://drupal.org/project/apachesolr'))) . '</li>';
+      $output .= '<li>' . t('Drupal search: tries to find similar nodes by searching for nodes using the standard search module. Requires the (core) search module to be enabled!') . '</li>';
+      $output .= '<li>' . t('Apache Solr search: tries to find similar nodes using the <a href="@apachesolr-project">Apache Solr</a> module which is required to be installed, configured and enabled.', array('@apachesolr-project' => url('http://drupal.org/project/apachesolr'))) . '</li>';
       $output .= '</ul>';
       return $output;
   }
@@ -118,28 +121,49 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
     _uniqueness_widget_store(array('type'=> $type, 'op' => $op));       // Save the content type and operation for later use
     if (user_access('use uniqueness widget') && in_array($op, variable_get('uniqueness_type_' . $type, array()))) {
       // Add our javascript.
-      _uniqueness_add_search_javascript();
-
+      _uniqueness_add_search_javascript($type, $form['nid']['#value']);
       // embed inline widget if enabled
       if (uniqueness_widget_enabled(UNIQUENESS_WIDGET_INLINE)) {
         $form['uniqueness'] = array(
           '#type' => 'fieldset',
           '#title' => t('@title', array('@title' => variable_get('uniqueness_default_title', t('Related content')))),
-          '#collapsible' => 1,
-          '#collapsed' => 0,
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#attributes' => array('class' => 'uniqueness-fieldset'),
           '#weight' => $form['title']['#weight'] + 1, // place underneith title
         );
         $form['uniqueness']['uniqueness_type'] = array(
           '#type' => 'item',
           '#title' => '',
+          '#value' => uniqueness_widget_content(),
         );
-        $form['uniqueness']['uniqueness_type']['#value'] = uniqueness_widget_content();
       }
-
-      // Add our submit handler.
-      $form['#submit'][] = '_uniqueness_node_add_submit';
-}
+    }
   }
+}
+
+/**
+ * Generates and embeds javascript code required for the uniqueness search.
+ */
+function _uniqueness_add_search_javascript($type, $nid) {
+  drupal_add_js(drupal_get_path('module', 'uniqueness') . '/uniqueness.js');
+  $search_url = base_path() . 'uniqueness-search/';
+  $settings = array(
+    'URL' => $search_url,
+    'prependResults' => (variable_get('uniqueness_results_prepend', 0) == 1),
+    'minCharacters' => variable_get('uniqueness_query_min', 1),
+  );
+  if (variable_get('uniqueness_scope', UNIQUENESS_SCOPE_CONTENT_TYPE) == UNIQUENESS_SCOPE_CONTENT_TYPE) {
+    $settings['type'] = $type;
+  }
+  if (is_numeric($nid) && $nid != 0) {
+    $settings['nid'] = $nid;
+  }
+  
+  //if (!empty($form_state['node_preview'])) {
+  //  $settings['preview'] = TRUE;
+  //}
+  drupal_add_js(array('uniqueness' => $settings), 'setting');
 }
 
 /**
@@ -173,45 +197,6 @@ function _uniqueness_widget_store($options = NULL) {
     $saved_options = $options;
   }
   return $saved_options;
-}
-
-/**
- * Generates and embeds javascript code required for the uniqueness search.
- */
-function _uniqueness_add_search_javascript() {
-  drupal_add_js(drupal_get_path('module', 'uniqueness') . '/uniqueness.js');
-  $search_url = base_path() . 'uniqueness-search/' . $type;
-  $settings = array(
-    'URL' => $search_url,
-    'preview' => FALSE,
-    'prependResults' => variable_get('uniqueness_results_prepend', 0) == 1 ? TRUE : FALSE,
-  );
-  if (!empty($form_state['node_preview'])) {
-    $settings['preview'] = TRUE;
-  }
-  drupal_add_js(array('uniqueness' => $settings), 'setting');
-}
-
-/**
- * Custom submit handler for the node add form.
- */
-function _uniqueness_node_add_submit($form, &$form_state) {
-  // We only look for similar content if the Preview button was clicked.
-  if ($form_state['clicked_button']['#id'] == 'edit-preview') {
-    $values = $form_state['values'];
-    $store = array();
-    // Store the title.
-    if (!empty($values['title'])) {
-      $store['title'] = strip_tags($values['title']);
-    }
-    // Store the tags.
-    if (!empty($values['taxonomy']['tags'][1])) {
-      $store['tags'] = strip_tags($values['taxonomy']['tags'][1]);
-    }
-    if (!empty($store)) {
-      _uniqueness_store($store);
-    }
-  }
 }
 
 /**
@@ -253,32 +238,23 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
 }
 
 /**
- * Content of our block.
+ * Content of our block or in-line fieldset
  */
 function uniqueness_widget_content() {
   $output = '';
   $description = t('!description', array('!description' => filter_xss(variable_get('uniqueness_default_description',
       "Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here."))));
-  if (!empty($description)) $output .= "<p>" . $description . "</p>";
-  $output .= '<div class="uniqueness-dyn">';
-  // If we have stored values we've previewed the post.
-  $values = _uniqueness_store();
-  if (!empty($values)) {
-    $content = uniqueness_content($values);
-    if (!empty($content)) {
-      // Show list of content to user.
-      $links = theme('related_content_list', $content);
-      $output .= $links;
-    }
+  if (!empty($description)) {
+    $output .= '<p class="uniqueness-prompt">' . $description . '</p>';
   }
-  $output .= '</div>';
+  $output .= '<div class="uniqueness-dyn"></div>';
   return $output;
 }
 
 /**
  * Callback for uniqueness-search returns HTML stubs for related content.
  */
-function uniqueness_dynamic_callback($type = '', $string = '') {
+function uniqueness_dynamic_callback() {
   // Build $values from $string.
   $values = array();
   // @todo refer to tags as 'terms'
@@ -288,16 +264,30 @@ function uniqueness_dynamic_callback($type = '', $string = '') {
   if ($_GET['title']) {
     $values['title'] = strip_tags($_GET['title']);
   }
+  if ($_GET['nid']) {
+    $values['nid'] = strip_tags($_GET['nid']);
+  }
+  if ($_GET['type']) {
+    $values['type'] = strip_tags($_GET['type']);
+  }
   if (!empty($values)) {
     $related_content = uniqueness_content($values);
   }
   if (!empty($related_content)) {
     $items = array();
+    $i = 0;
+    $limit = variable_get('uniqueness_results_max', 10);
     foreach ($related_content as $nid => $item) {
       // Build items and avoid duplicates.
       if (!in_array($nid, array_keys($items))) {
         $items[$nid] = $item;
         $items[$nid]['href'] = url('node/' . $nid);
+        if (++$i > $limit) {
+          // At least one more than the results_max limit were found
+          // Communicate "and more" to the widget 
+          $items[$nid]['more'] = TRUE;
+          break;                          // LOOP EXIT
+        }
       }
     }
     drupal_json($items);
@@ -332,9 +322,17 @@ function _uniqueness_content_nodetitle($values) {
   $related_content = array();
   // Query node table.
   if ($values['title']) {
+    $where = array($values['title']);
     $sql = "SELECT n.nid, n.title FROM {node} n WHERE LOWER(n.title) LIKE LOWER('%%%s%') AND n.status = 1";
-    // @todo types
-    $result = db_query(db_rewrite_sql($sql), $values['title']);
+    if (array_key_exists('type', $values)) {
+      $sql .= " AND n.type = '%s'";
+      $where[] = $values['type'];
+    }
+    if (array_key_exists('type', $values) && is_numeric($values['nid'])) {
+      $sql .= " AND n.nid != %d";
+      $where[] = $values['nid'];
+    }
+    $result = db_query_range(db_rewrite_sql($sql), $where, 0, variable_get('uniqueness_results_max', 10)  + 1 ); // +1 for "... and more"
     while ($row = db_fetch_array($result)) {
       $related_content[$row['nid']] = $row;
     }
@@ -354,18 +352,21 @@ function _uniqueness_content_drupalsearch($values) {
   }
 
   // build search string
-  // @todo add types by adding e.g. type:blog
-  $searchstring = join(' OR ', split(' ', $values['title']));
+  $searchstring = array_key_exists('type', $values) ? " type:$type" : '';
+  $searchstring .= join(' OR ', split(' ', $values['title']));
   $search_results = node_search('search', $searchstring);
 
   $related_content = array();
+  $nid = (array_key_exists('nid', $values) ? $values['nid'] : 0);
   foreach ($search_results as $result) {
       $item = array();
       // Title has already been filtered.
       $item['html'] = TRUE;
       $item['nid'] = $result['node']->nid;
       $item['title'] = $result['title'];
-      $related_content["{$result['node']->nid}"] = $item;
+      if ($nid != $item['nid']) {
+        $related_content["{$result['node']->nid}"] = $item;
+      }
   }
 
   return $related_content;
@@ -375,6 +376,7 @@ function _uniqueness_content_drupalsearch($values) {
  * Searches for realted content using the apachesolr module.
  */
 function _uniqueness_content_solr($values) {
+  // @todo implement $values['type'] and $values['nid']
   // Check that the apachesolr module is available
   if (!module_exists('apachesolr_search')) {
     drupal_set_message(t('Solr search module not found. Please select a different search mode on the uniqueness configuration page.'), 'warning');
@@ -411,6 +413,7 @@ function _uniqueness_content_solr($values) {
 function uniqueness_solr($string, $filter) {
   $related_content = array();
   try {
+    // @todo Limit number of results
     $solr_results = apachesolr_search_execute($string, $filter, '', '', 0, 'uniqueness');
     foreach ($solr_results as $result) {
       $item = array();
@@ -437,32 +440,3 @@ function uniqueness_apachesolr_prepare_query(&$query, &$params, $caller) {
   }
 }
 
-/**
- * Implementation of hook_theme().
- */
-function uniqueness_theme($existing, $type, $theme, $path) {
-  return array(
-    'related_content_list' => array(
-      'arguments' => array('content' => NULL),
-    ),
-  );
-}
-
-/**
- * Theme function returns list of links.
- *
- * Note, $content can contain unsanitized content from the database.
- */
-function theme_related_content_list($content) {
-  $items = array();
-  foreach ($content as $nid => $item) {
-    // Avoid duplicates.
-    if (!in_array($nid, array_keys($items))) {
-      // Storage.
-      $items[$nid] = $item;
-      $options = array('html' => $item['html'], 'attributes' => array('target' => '_blank'));
-      $links[] = l($item['title'], 'node/' . $item['nid'], $options);
-    }
-  }
-  return theme('item_list', $links);
-}
