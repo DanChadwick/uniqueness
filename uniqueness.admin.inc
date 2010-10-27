@@ -98,8 +98,15 @@ function uniqueness_settings() {
     '#title' => t('Default description'),
     '#default_value' => variable_get('uniqueness_default_description',
         t("Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here.")),
-    '#rows' => 2,
+    '#rows' => 1,
     '#description' => t('Explanation displayed within the widget before the list of duplicates.'),
+  );
+  $form['appearance']['uniqueness_default_description_unique'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Default unique description'),
+    '#default_value' => variable_get('uniqueness_default_description_unique', t('Success! No duplicates found.')),
+    '#rows' => 1,
+    '#description' => t('Explanation displayed within the widget when the title is unique.'),
   );
 
   return system_settings_form($form);

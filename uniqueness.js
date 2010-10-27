@@ -45,6 +45,7 @@ Drupal.uniqueness = function (uri, widget) {
   if (this.prompt) {
     this.originalPrompt = this.prompt.html();
   }
+  this.uniquePrompt = Drupal.settings.uniqueness['uniquePrompt'];
   this.widgetCSS = {
     'background-image' : "url('" + Drupal.settings.basePath + "misc/throbber.gif" + "')",
     'background-position' : '100% -18px',
@@ -81,14 +82,14 @@ Drupal.uniqueness.prototype.update = function (data) {
     if (data == undefined) {
       uniqueness.clear();
       if (uniqueness.prompt && $('#edit-title')[0].value.length > 0) {
-          uniqueness.prompt.html('<span class="uniqueness-success">Success!</span> No duplicates found.');
+          uniqueness.prompt.html(uniqueness.uniquePrompt);
       }
       return;
     }
     var items = '';
     $.each(data, function(i, item) {
       if (item.more) {
-        uniqueness.notifier.append('... and others.');
+        uniqueness.notifier.append(Drupal.t('... and others.'));
       }
       else {
         items += '<li><a href="' + item.href + '" target="_blank">' + item.title + '</a></li>';
@@ -116,7 +117,7 @@ Drupal.uniqueness.prototype.search = function (element, searchString) {
   this.timer = setTimeout(function () {
     // Inform user we're searching.
     if (uniqueness.notifier.hasClass('uniqueness-dyn-searching') == false) {
-      uniqueness.notifier.addClass('uniqueness-dyn-searching').html('Searching ...');
+      uniqueness.notifier.addClass('uniqueness-dyn-searching').html(Drupal.t('Searching ...'));
       uniqueness.widget.css(uniqueness.widgetCSS);
     }
     var query = uniqueness.uri + '?';

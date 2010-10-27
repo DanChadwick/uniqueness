@@ -83,7 +83,7 @@ function uniqueness_content_extra_fields() {
     return array();
 
   $extras['uniqueness'] = array(
-    'label' => t('@title', array('@title' => variable_get('uniqueness_default_title', t('Related content')))),
+    'label' => uniqueness_filter_xss_inline(variable_get('uniqueness_default_title', t('Related content'))),
     'description' => t('Uniqueness inline widget.'),
   );
 
@@ -126,7 +126,7 @@ function uniqueness_form_alter(&$form, $form_state, $form_id) {
       if (uniqueness_widget_enabled(UNIQUENESS_WIDGET_INLINE)) {
         $form['uniqueness'] = array(
           '#type' => 'fieldset',
-          '#title' => t('@title', array('@title' => variable_get('uniqueness_default_title', t('Related content')))),
+          '#title' => uniqueness_filter_xss_inline(variable_get('uniqueness_default_title', t('Related content'))),
           '#collapsible' => TRUE,
           '#collapsed' => TRUE,
           '#attributes' => array('class' => 'uniqueness-fieldset'),
@@ -152,6 +152,7 @@ function _uniqueness_add_search_javascript($type, $nid) {
     'URL' => $search_url,
     'prependResults' => (variable_get('uniqueness_results_prepend', 0) == 1),
     'minCharacters' => variable_get('uniqueness_query_min', 1),
+    'uniquePrompt' => uniqueness_filter_xss_inline(variable_get('uniqueness_default_description_unique', t('Success! No duplicates found.'))),
   );
   if (variable_get('uniqueness_scope', UNIQUENESS_SCOPE_CONTENT_TYPE) == UNIQUENESS_SCOPE_CONTENT_TYPE) {
     $settings['type'] = $type;
@@ -161,6 +162,13 @@ function _uniqueness_add_search_javascript($type, $nid) {
   }
   
   drupal_add_js(array('uniqueness' => $settings), 'setting');
+}
+
+/**
+ * Helper function for filtering against XSS and allowing reasonable in-line elements
+ */
+function uniqueness_filter_xss_inline($string) {
+  return filter_xss($string, array('abbr', 'acronym', 'b', 'cite', 'em', 'i', 'img', 'span', 'strong', 'sub', 'sup'));
 }
 
 /**
@@ -227,7 +235,7 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
     $options = _uniqueness_widget_store();
     if ($options !== NULL && user_access('use uniqueness widget') && $delta == 'uniqueness' && 
         in_array($options['op'], variable_get('uniqueness_type_' . $options['type'], array()))) {
-      $block['subject'] = t('@title', array('@title' => variable_get('uniqueness_default_title', 'Related content')));
+      $block['subject'] = uniqueness_filter_xss_inline(variable_get('uniqueness_default_title', t('Related content')));
       $block['content'] = uniqueness_widget_content();
       return $block;
     }
@@ -239,8 +247,8 @@ function uniqueness_block($op = 'list', $delta = 0, $edit = array()) {
  */
 function uniqueness_widget_content() {
   $output = '';
-  $description = t('!description', array('!description' => filter_xss(variable_get('uniqueness_default_description',
-      "Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here."))));
+  $description = uniqueness_filter_xss_inline(variable_get('uniqueness_default_description',
+      "Help us increase the signal to noise ratio! If we find content that's related or similar to what you're posting it will be listed here."));
   if (!empty($description)) {
     $output .= '<p class="uniqueness-prompt">' . $description . '</p>';
   }
