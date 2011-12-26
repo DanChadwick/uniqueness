@@ -1,27 +1,31 @@
 // $Id$
 
 Drupal.behaviors.uniqueness = function (context) {
-  uniqueness = new Drupal.uniqueness(Drupal.settings.uniqueness['URL'], $('.uniqueness-dyn'));
-  // Search off title.
-  $('#edit-title').keyup(function() {
-    input = this.value;
-    if (input.length >= uniqueness.minCharacters) {
-      uniqueness.search('title', input);
-    }
-    else if(input.length == 0 && !uniqueness.prependResults) {
-      uniqueness.clear();
-    }
-  })
-  .keyup();     // Call immediately upon page load
-  // Search off tags.
-  $('#edit-taxonomy-tags-1').blur(function() {
-    input = this.value;
-    // Some tags set.
-    if (input.length > 0) {
-      uniqueness.search('tags', input);
-    }
+  $('#edit-title:not(.uniqueness-processed), context').each(function() {
+    uniqueness = new Drupal.uniqueness(Drupal.settings.uniqueness['URL'], $('.uniqueness-dyn'));
+    // Search off title.
+    $(this).keyup(function() {
+      input = this.value;
+      if (input.length >= uniqueness.minCharacters) {
+        uniqueness.search('title', input);
+      }
+      else if(input.length == 0 && !uniqueness.prependResults) {
+        uniqueness.clear();
+      }
+    })
+    // Prevent reinitialization if AttachBehaviors is called by other jQuery
+    .addClass('uniqueness-processed')
+    // Call immediately upon page load
+    .keyup();     
+    // Search off tags.
+    $('#edit-taxonomy-tags-1').blur(function() {
+      input = this.value;
+      // Some tags set.
+      if (input.length > 0) {
+        uniqueness.search('tags', input);
+      }
+    });
   });
-  
 };
 
 Drupal.uniqueness = function (uri, widget) {
