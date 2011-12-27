@@ -13,7 +13,7 @@ Drupal.behaviors.uniqueness = function (context) {
         uniqueness.clear();
       }
     })
-    // Prevent reinitialization if AttachBehaviors is called by other jQuery
+    // Prevent reinitialization if Drupal.attachBehaviors is called by other jQuery
     .addClass('uniqueness-processed')
     // Call immediately upon page load
     .keyup();     
